@@ -25,39 +25,58 @@
   #goal{margin-top:6px;padding-top:6px;border-top:2px solid var(--gold);font-size:clamp(18px,5vw,26px);font-weight:600;color:var(--g2);opacity:.8}
   .btn{border:0;cursor:pointer;font-family:inherit;font-weight:700;border-radius:999px;transition:transform .08s}
   .btn:active{transform:scale(.96)}
-  #pray{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;font-size:clamp(20px,5vw,26px);padding:18px 44px;box-shadow:0 8px 24px rgba(15,107,79,.35)}
+  #pray{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;font-size:clamp(22px,6vw,30px);padding:24px 60px;box-shadow:0 8px 24px rgba(15,107,79,.35)}
   #share{background:#fff;color:var(--g2);border:2px solid var(--g);font-size:18px;padding:12px 32px}
   .note{margin:0;font-size:15px;opacity:.75}
+  .rights{margin-top:-12px;font-size:13px;opacity:.6}
   .by{margin-top:6px;font-size:13px;opacity:.6;direction:ltr}
   .float{position:fixed;pointer-events:none;color:var(--g);font-weight:700;font-size:20px;animation:up 1.2s ease-out forwards;white-space:nowrap}
   @keyframes up{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-90px)}}
 </style>
 </head>
 <body>
-  <h1>🤍 مليار صلاة على النبي ﷺ</h1>
+  <h1 id="title">🤍 مليار صلاة على النبي ﷺ</h1>
   <div id="counter"><div id="count">0</div><div id="goal">1,000,000,000</div></div>
   <button id="pray" class="btn">صلِّ على النبي ﷺ</button>
-  <p class="note">كل ضغطة تُسجّل صلاة واحدة عبر الموقع</p>
+  <p id="mine" class="note" style="display:none;color:var(--g2);opacity:1;font-weight:700"></p>
+  <p id="note" class="note">كل ضغطة تُسجّل صلاة واحدة عبر الموقع</p>
   <button id="share" class="btn">شارك الحملة</button>
   <div class="by">By Mohamed Gomaa</div>
+  <div id="rights" class="rights">جميع الحقوق محفوظة</div>
 
 <script>
 // ضع رابط قاعدة بيانات Firebase هنا (بدون / في الآخر). لو فاضي، العدّاد يشتغل على جهاز الزائر فقط (تجربة).
 const DB_URL = "https://geojobs-a0bd6-default-rtdb.firebaseio.com";
-const GOAL = 1000000000;
+let GOAL = 1000000000;
+let vibrateMs = 30;
+let SHARE_TEXT = "🤍 مليار صلاة على النبي ﷺ\nشاركنا في الحملة: كل ضغطة = صلاة واحدة\n";
+const POLL_MS = 1000;  // كل كام مللي ثانية يجيب العدد الجديد (1000 = ثانية)
+const FLUSH_MS = 1000; // كل كام مللي ثانية يبعت الضغطات
 
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("en-US");
 let server = 0, pending = 0, busy = false;
 
-function render(){ $("count").textContent = fmt(server + pending); $("goal").textContent = fmt(GOAL); }
+let shown = null, animating = false;
+function tick(){
+  const target = server + pending;
+  if(shown === null) shown = target;
+  let diff = target - shown;
+  if(Math.abs(diff) < 1){ shown = target; animating = false; }
+  else { shown += diff * 0.25; requestAnimationFrame(tick); }
+  $("count").textContent = fmt(Math.round(shown));
+}
+function render(){
+  $("goal").textContent = fmt(GOAL);
+  if(!animating){ animating = true; requestAnimationFrame(tick); }
+}
 
 async function pull(){
   if(!DB_URL){ server = +localStorage.getItem("salawat") || 0; render(); return; }
   try{
     const v = await (await fetch(DB_URL + "/count.json")).json();
     dbg("GET ok: " + JSON.stringify(v));
-    if(typeof v === "number"){ server = v; render(); }
+    if(typeof v === "number" && !busy){ server = v; render(); }
   }catch(e){ dbg("GET error: " + e); }
 }
 
@@ -96,8 +115,14 @@ async function flush(){
   busy = false; render();
 }
 
+let mine = 0;
+try{ mine = +localStorage.getItem("mine") || 0; }catch(e){}
+function showMine(){ if(mine > 0){ $("mine").style.display = ""; $("mine").textContent = "صلّيت أنت: " + fmt(mine) + " مرة 🤍"; } }
+showMine();
 $("pray").addEventListener("click", e => {
   pending++; render();
+  mine++; try{ localStorage.setItem("mine", mine); }catch(err){} showMine();
+  if(vibrateMs > 0 && navigator.vibrate) navigator.vibrate(vibrateMs);
   const f = document.createElement("div");
   f.className = "float"; f.textContent = "اللهم صلِّ وسلِّم على نبينا محمد";
   f.style.left = Math.max(8, Math.min(innerWidth - 220, e.clientX - 100)) + "px";
@@ -107,7 +132,7 @@ $("pray").addEventListener("click", e => {
 
 $("share").addEventListener("click", async () => {
   const url = location.href.split("#")[0];
-  const text = "🤍 مليار صلاة على النبي ﷺ\nشاركنا في الحملة: كل ضغطة = صلاة واحدة\n";
+  const text = SHARE_TEXT;
   if(navigator.share){
     try{ await navigator.share({title: "مليار صلاة على النبي ﷺ", text, url}); return; }
     catch(e){ if(e.name === "AbortError") return; }
@@ -119,8 +144,25 @@ if(DEBUG){
   document.addEventListener("securitypolicyviolation", ev => dbg("CSP blocked: " + ev.violatedDirective + " -> " + ev.blockedURI));
   fetch("https://www.gstatic.com/generate_204", {mode: "no-cors"}).then(() => dbg("net test OK")).catch(e => dbg("net test FAIL: " + e));
 }
-setInterval(flush, 1500);
-setInterval(() => { if(!pending) pull(); }, 5000);
+// إعدادات تتغير من Firebase (عقدة config) بدون رفع ملف جديد
+function applyCfg(c){
+  if(!c || typeof c !== "object") return;
+  if(typeof c.title === "string" && c.title){ $("title").textContent = c.title; document.title = c.title; }
+  if(typeof c.button === "string" && c.button) $("pray").textContent = c.button;
+  if(typeof c.note === "string" && c.note) $("note").textContent = c.note;
+  if(typeof c.rights === "string") $("rights").textContent = c.rights;
+  if(typeof c.shareText === "string" && c.shareText) SHARE_TEXT = c.shareText + "\n";
+  if(+c.goal > 0){ GOAL = +c.goal; render(); }
+  if(c.vibrate !== undefined && !isNaN(+c.vibrate)) vibrateMs = Math.max(0, Math.min(200, +c.vibrate));
+}
+async function loadCfg(){
+  if(!DB_URL) return;
+  try{ applyCfg(await (await fetch(DB_URL + "/config.json")).json()); }catch(e){}
+}
+loadCfg(); setInterval(loadCfg, 30000);
+setInterval(flush, FLUSH_MS);
+setInterval(() => { if(!document.hidden && !busy) pull(); }, POLL_MS);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) pull(); });
 addEventListener("pagehide", flush);
 pull();
 </script>
