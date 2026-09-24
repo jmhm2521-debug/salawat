@@ -48,7 +48,7 @@
 // ضع رابط قاعدة بيانات Firebase هنا (بدون / في الآخر). لو فاضي، العدّاد يشتغل على جهاز الزائر فقط (تجربة).
 const DB_URL = "https://geojobs-a0bd6-default-rtdb.firebaseio.com";
 let GOAL = 1000000000;
-let vibrateMs = 30;
+let vibrateMs = 80;
 let SHARE_TEXT = "🤍 مليار صلاة على النبي ﷺ\nشاركنا في الحملة: كل ضغطة = صلاة واحدة\n";
 const POLL_MS = 1000;  // كل كام مللي ثانية يجيب العدد الجديد (1000 = ثانية)
 const FLUSH_MS = 1000; // كل كام مللي ثانية يبعت الضغطات
@@ -122,7 +122,11 @@ showMine();
 $("pray").addEventListener("click", e => {
   pending++; render();
   mine++; try{ localStorage.setItem("mine", mine); }catch(err){} showMine();
-  if(vibrateMs > 0 && navigator.vibrate) navigator.vibrate(vibrateMs);
+  if(vibrateMs > 0){
+    let ok = false;
+    try{ ok = navigator.vibrate ? navigator.vibrate([vibrateMs]) : "unsupported"; }catch(err){ ok = "error"; }
+    dbg("vibrate " + vibrateMs + "ms -> " + ok);
+  }
   const f = document.createElement("div");
   f.className = "float"; f.textContent = "اللهم صلِّ وسلِّم على نبينا محمد";
   f.style.left = Math.max(8, Math.min(innerWidth - 220, e.clientX - 100)) + "px";
